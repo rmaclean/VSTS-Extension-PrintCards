@@ -84,12 +84,127 @@ module canvasCard {
         return modifiedText;
     }
 
-    interface drawCardsResult {
-        cards: Array<HTMLDivElement>,
+    interface drawCardResult {
+        card: HTMLDivElement,
         maxHeight: number
     }
 
-    export function drawCards(testData: Array<any>, initialMaxHeight: number, largestId: number, renderExtras: boolean): drawCardsResult {
+    function drawCard(item: any, cardWidth: number, maxHeight: number, renderExtras: boolean): drawCardResult {
+        var cardSpace = cardWidth;
+        var cardIndent = 30;
+        var adjustedWidthForQRCode = false;
+        var cardElement = <HTMLDivElement>document.createElement("div");
+        cardElement.classList.add("card");
+        var canvas = document.createElement("canvas");
+        canvas.width = cardSpace;
+        canvas.height = maxHeight;
+
+        var context = canvas.getContext("2d");
+        context.font = "bold 14px Segoe UI";
+        var offset = context.measureText(item.id).width + 5;
+        context.fillText(item.id, cardIndent + padding, 20 + padding);
+        var title = trim(item.title);
+        var nexty = wrapText(context, title, cardIndent + padding + offset, 20 + padding, cardSpace - (cardIndent + (padding * 2) + offset));
+
+        context.font = "14px Segoe UI";
+        nexty += lineHeight + 15;
+        var assignedToStart = cardIndent + padding;
+        var assignedTo = trimText(item.assignedTo, cardSpace - assignedToStart, context);
+        context.fillText(assignedTo, cardIndent + padding, nexty);
+
+        var qrCodeSize = 80;
+        var qrCodeLeft = cardSpace - qrCodeSize - 5;
+        var qrCodeTop = maxHeight - qrCodeSize - 5;
+        qrCodeCanvas.generate(item.cardUrl, qrCodeTop, qrCodeLeft, qrCodeSize - 5, canvas);
+
+        context.font = "12px Segoe UI Light";
+        var keyWidth = 0;
+        item.fields.forEach(element => {
+            var metrics = context.measureText(element.title);
+            if (metrics.width > keyWidth) {
+                keyWidth = metrics.width;
+            }
+        });
+
+        keyWidth += 10;
+
+        item.fields.forEach(element => {
+            nexty += lineHeight;
+            if (!adjustedWidthForQRCode && nexty >= qrCodeTop) {
+                cardSpace -= qrCodeSize - 5;
+                adjustedWidthForQRCode = true;
+            }
+
+            context.font = "12px Segoe UI Light";
+            context.fillText(element.title, cardIndent + padding, nexty);
+
+            context.font = "12px Segoe UI";
+            var valueStart = cardIndent + padding + keyWidth;
+            var valueSpace = cardSpace - valueStart - 4;
+            var fieldValue = trimText(element.value, valueSpace, context);
+            context.fillText(fieldValue, valueStart, nexty);
+        });
+
+        nexty += lineHeight;
+        var nextx = cardIndent + padding;
+        var tagHorizontalSpace = 4;
+        item.tags.forEach(element => {
+            var metrics = context.measureText(element);
+            if (!adjustedWidthForQRCode && nexty >= qrCodeTop - 4) {
+                cardSpace -= qrCodeSize - 5;
+                adjustedWidthForQRCode = true;
+            }
+
+            var tagPositionEnd = metrics.width + nextx + 5;
+            if (tagPositionEnd > cardSpace) {
+                nexty += lineHeight + 4;
+                nextx = cardIndent + padding;
+            }
+
+            context.beginPath();
+            context.rect(nextx, nexty - 14, metrics.width + (tagHorizontalSpace * 2), lineHeight - 2);
+            context.fillStyle = '#bfbfbf';
+            context.fill();
+
+            context.fillStyle = '#000000';
+            context.fillText(element, nextx + 3, nexty);
+            nextx += metrics.width + (tagHorizontalSpace * 2) + 4;
+        });
+
+        nexty += lineHeight;
+
+        if (qrCodeTop + qrCodeSize > nexty) {
+            nexty = qrCodeTop + qrCodeSize;
+        }
+
+        if (nexty > maxHeight) {
+            maxHeight = nexty;
+        }
+
+        cardElement.appendChild(canvas);
+
+        if (renderExtras) {
+            drawLine(context, 0, 0, 0, maxHeight);
+            drawLine(context, 0, 0, cardWidth, 0);
+            drawLine(context, cardWidth, maxHeight, cardWidth, 0);
+            drawLine(context, cardWidth, maxHeight, 0, maxHeight);
+            drawLine(context, cardIndent - 5, 0, cardIndent - 5, maxHeight);
+            context.save();
+            context.font = "12px Segoe UI";
+            context.translate(0, maxHeight);
+            context.rotate(-0.5 * Math.PI);
+            var metrics = context.measureText(item.type);
+            context.fillText(item.type, (maxHeight / 2 - metrics.width / 2), 17);
+            context.restore();
+        }
+
+        return {
+            card: cardElement,
+            maxHeight: maxHeight
+        }
+    }
+
+    export function drawCards(testData: Array<any>): Array<HTMLDivElement> {
         var minCardHeight = 150;
         var initialCardWidth = 300;
         ///* this is just to deal with inconsistent printer margins that each browser uses */
@@ -99,121 +214,13 @@ module canvasCard {
         //if (navigator.userAgent.indexOf("Edge/") > -1) { cardWidth = 300; } /* edge must be last since it also tries to trick us into thinking it is chrome */
 
         var cards = new Array<HTMLDivElement>();
-        var maxHeight = initialMaxHeight;
         testData.forEach(item => {
-            var cardWidth = initialCardWidth;
-            var cardSpace = cardWidth;
-            var cardIndent = 30;
-            var adjustedWidthForQRCode = false;
-            var cardElement = <HTMLDivElement>document.createElement("div");
-            cardElement.classList.add("card");
-            var canvas = document.createElement("canvas");
-            canvas.width = cardSpace;
-            canvas.height = initialMaxHeight;
-            var context = canvas.getContext("2d");
-            context.font = "bold 14px Segoe UI";
-            var offset = context.measureText(largestId.toString()).width + 5;
-            context.fillText(item.id, cardIndent + padding, 20 + padding);
-            var title = trim(item.title);
-            var nexty = wrapText(context, title, cardIndent + padding + offset, 20 + padding, cardSpace - (cardIndent + (padding * 2) + offset));
-
-            context.font = "14px Segoe UI";
-            nexty += lineHeight + 15;
-            var assignedToStart = cardIndent + padding;
-            var assignedTo = trimText(item.assignedTo, cardSpace - assignedToStart, context);
-            context.fillText(assignedTo, cardIndent + padding, nexty);
-
-            var qrCodeSize = 80;
-            var qrCodeLeft = cardSpace - qrCodeSize - 5;
-            var qrCodeTop = maxHeight - qrCodeSize - 5;
-            qrCodeCanvas.generate(item.cardUrl, qrCodeTop, qrCodeLeft, qrCodeSize - 5, canvas);
-
-            context.font = "12px Segoe UI Light";
-            var keyWidth = 0;
-            item.fields.forEach(element => {
-                var metrics = context.measureText(element.title);
-                if (metrics.width > keyWidth) {
-                    keyWidth = metrics.width;
-                }
-            });
-
-            keyWidth += 10;
-
-            item.fields.forEach(element => {
-                nexty += lineHeight;
-                if (!adjustedWidthForQRCode && nexty >= qrCodeTop) {
-                    cardSpace -= qrCodeSize - 5;
-                    adjustedWidthForQRCode = true;
-                }
-
-                context.font = "12px Segoe UI Light";
-                context.fillText(element.title, cardIndent + padding, nexty);
-
-                context.font = "12px Segoe UI";
-                var valueStart = cardIndent + padding + keyWidth;
-                var valueSpace = cardSpace - valueStart - 4;
-                var fieldValue = trimText(element.value, valueSpace, context);              
-                context.fillText(fieldValue, valueStart, nexty);
-            });
-
-            nexty += lineHeight;
-            var nextx = cardIndent + padding;
-            var tagHorizontalSpace = 4;
-            item.tags.forEach(element => {
-                var metrics = context.measureText(element);
-                if (!adjustedWidthForQRCode && nexty >= qrCodeTop - 4) {
-                    cardSpace -= qrCodeSize - 5;
-                    adjustedWidthForQRCode = true;
-                }
-
-                var tagPositionEnd = metrics.width + nextx + 5;
-                if (tagPositionEnd > cardSpace) {
-                    nexty += lineHeight + 4;
-                    nextx = cardIndent + padding;
-                }
-
-                context.beginPath();
-                context.rect(nextx, nexty - 14, metrics.width + (tagHorizontalSpace * 2), lineHeight - 2);
-                context.fillStyle = '#bfbfbf';
-                context.fill();
-
-                context.fillStyle = '#000000';
-                context.fillText(element, nextx + 3, nexty);
-                nextx += metrics.width + (tagHorizontalSpace * 2) + 4;
-            });
-
-            if (nexty > maxHeight) {
-                maxHeight = nexty;
-            }
-
-            cardElement.appendChild(canvas);
-
-            if (renderExtras) {
-                drawLine(context, 0, 0, 0, maxHeight);
-                drawLine(context, 0, 0, cardWidth, 0);
-                drawLine(context, cardWidth, maxHeight, cardWidth, 0);
-                drawLine(context, cardWidth, maxHeight, 0, maxHeight);
-                drawLine(context, cardIndent - 5, 0, cardIndent - 5, maxHeight);
-                context.save();
-                context.font = "12px Segoe UI";
-                context.translate(0, maxHeight);
-                context.rotate(-0.5 * Math.PI);
-                var metrics = context.measureText(item.type);
-                context.fillText(item.type, (maxHeight / 2 - metrics.width / 2), 17);
-                context.restore();
-            }
-
-            cards.push(cardElement);
+            var firstPass = drawCard(item, initialCardWidth, minCardHeight, false);
+            var secondPass = drawCard(item, initialCardWidth, firstPass.maxHeight, true);
+            cards.push(secondPass.card);
         });
 
-        if (maxHeight < minCardHeight) {
-            maxHeight = minCardHeight;
-        }
-
-        return {
-            cards: cards,
-            maxHeight: maxHeight + 10
-        };
+        return cards;
     }
 }
 
@@ -387,10 +394,9 @@ module AlmRangers.VsoExtensions {
                                                 }
                                             }
 
-                                            var firstPassResult = canvasCard.drawCards(cardData, 0, largestId, false);                                            
-                                            var secondPassResult = canvasCard.drawCards(cardData, firstPassResult.maxHeight, largestId, true);
+                                            var cards = canvasCard.drawCards(cardData);
 
-                                            secondPassResult.cards.forEach(card => {
+                                            cards.forEach(card => {
                                                 this.cardsContainer.appendChild(card);
                                             });
 
